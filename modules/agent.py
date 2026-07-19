@@ -7,7 +7,19 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 import datetime
+import csv
+import os
 
+def load_valid_symptoms(csv_path="data/symptoms.csv"):
+    """Load the master symptom list so perceive() can catch typos early."""
+    valid = set()
+    if os.path.exists(csv_path):
+        with open(csv_path) as f:
+            reader = csv.DictReader(f)
+            valid = {row["symptom_name"] for row in reader}
+    return valid
+
+VALID_SYMPTOMS = load_valid_symptoms()
 class AgentState(Enum):
     IDLE         = "idle"
     COLLECTING   = "collecting_symptoms"
@@ -59,11 +71,23 @@ class HealthcareDiagnosticAgent:
 
     def register_module(self, name: str, module):
         """Plug in AI sub-modules (KB, Bayes, ML, etc.)"""
+        if not hasattr(module, 'analyze'):
+            raise ValueError(
+                f"Module '{name}' must implement an analyze(patient) method "
+                f"before it can be registered."
+            )
         self._modules[name] = module
         print(f"  🔌 Module registered: [{name}]")
 
     def perceive(self, percept: PatientPercept):
         """Step 1: Perceive the environment"""
+        if VALID_SYMPTOMS:
+            unknown = [s for s in percept.symptoms if s not in VALID_SYMPTOMS]
+            if unknown:
+                raise ValueError(
+                    f"Unrecognized symptom(s): {unknown}. "
+                    f"Check data/symptoms.csv for the master list."
+                )
         self.memory.current_patient = percept
         self.memory.patient_history.append({
             'id': percept.patient_id,
@@ -85,9 +109,16 @@ class HealthcareDiagnosticAgent:
         # Run each registered module
         for module_name, module in self._modules.items():
             if hasattr(module, 'analyze'):
-                result = module.analyze(self.memory.current_patient)
+                try:
+                    result = module.analyze(self.memory.current_patient)
+                except Exception as e:
+                    # One module failing must not crash the whole diagnostic run --
+                    # the other modules' opinions are still valuable.
+                    result = {'diagnosis': None, 'confidence': 0.0, 'error': str(e)}
+                    self._log(f"  [{module_name}] → ERROR: {e}")
+                else:
+                    self._log(f"  [{module_name}] → {result.get('summary','done')}")
                 results[module_name] = result
-                self._log(f"  [{module_name}] → {result.get('summary','done')}")
 
         self.memory.diagnosis_history.append(results)
         self.state = AgentState.RECOMMENDING
@@ -193,6 +224,7 @@ class HealthcareDiagnosticAgent:
     def _log(self, message):
         entry = f"[{self.state.value}] {message}"
         self.memory.action_log.append(entry)
+        print(entry)
 
     def print_log(self):
         print("\n📋 Agent Action Log:")
@@ -206,3 +238,32 @@ class HealthcareDiagnosticAgent:
             'performance_score': self.performance_score,
             'diagnoses_made':    len(self.memory.diagnosis_history)
         }
+
+
+# ============================================================
+# STANDALONE TEST
+# Per the manual's "Pro Tip": run each module independently
+# first using its own test code, before wiring into app.py.
+#
+# This matches the manual's own test setup and expected output
+# exactly:
+#     [collecting_symptoms] Perceived patient P001 with 2 symptoms
+#     Agent test passed!
+# ============================================================
+
+if __name__ == "__main__":
+    # This represents one patient's data (per the manual's own example)
+    patient = PatientPercept(
+        patient_id="P001",
+        symptoms=["fever", "cough"],
+        age=34,
+        temperature=38.9,     # Celsius
+        heart_rate=98,        # BPM
+        blood_pressure="120/80"
+    )
+
+    agent = HealthcareDiagnosticAgent()
+    agent.perceive(patient)
+    print("Agent test passed!")
+
+   

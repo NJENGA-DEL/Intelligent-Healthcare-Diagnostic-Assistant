@@ -1,0 +1,27 @@
+symptom_id,symptom_name,description
+0,fever,Elevated body temperature above normal range
+1,cough,Persistent dry or productive coughing
+2,fatigue,Unusual tiredness or lack of energy
+3,headache,Pain or discomfort in the head region
+4,sore_throat,Pain scratchiness or irritation of the throat
+5,runny_nose,Nasal discharge or congestion
+6,body_aches,General muscle or body pain
+7,chills,Sensation of cold with shivering
+8,nausea,Urge to vomit or feeling sick to the stomach
+9,vomiting,Forceful expulsion of stomach contents
+10,diarrhea,Frequent loose or watery bowel movements
+11,rash,Abnormal change in skin color or texture
+12,joint_pain,Pain in one or more joints
+13,chest_pain,Discomfort or pain in the chest area
+14,shortness_of_breath,Difficulty breathing or breathlessness
+15,loss_of_smell,Reduced or absent sense of smell
+16,abdominal_pain,Pain or discomfort in the stomach or abdomen area
+17,dizziness,Feeling faint unsteady or lightheaded
+18,night_sweats,Excessive sweating during sleep
+19,weight_loss,Unintentional loss of body weight
+20,loss_of_appetite,Reduced desire to eat
+21,jaundice,Yellowing of the skin or eyes
+22,painful_urination,Discomfort or burning sensation while urinating
+23,facial_pain,Pain or pressure around the nose sinuses or cheeks
+24,swollen_tonsils,Enlarged or inflamed tonsils
+25,wheezing,High pitched whistling sound when breathing
