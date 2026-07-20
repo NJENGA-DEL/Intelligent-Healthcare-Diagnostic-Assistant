@@ -1,0 +1,16 @@
+disease_id,disease_name,prior_probability,description
+0,flu,0.14,Seasonal influenza viral infection
+1,covid19,0.10,Coronavirus respiratory infection
+2,common_cold,0.16,Mild upper respiratory viral infection
+3,dengue,0.07,Mosquito-borne viral infection
+4,malaria,0.09,Mosquito-borne parasitic infection
+5,typhoid,0.06,Bacterial infection from contaminated food or water
+6,pneumonia,0.07,Infection causing inflammation of the lungs
+7,migraine,0.05,Neurological condition causing severe headaches
+8,tuberculosis,0.04,Bacterial infection primarily affecting the lungs
+9,hepatitis_a,0.03,Viral liver infection spread through contaminated food or water
+10,urinary_tract_infection,0.06,Bacterial infection of the urinary system
+11,sinusitis,0.05,Inflammation of the sinus cavities
+12,gastroenteritis,0.04,Inflammation of the stomach and intestines
+13,bronchitis,0.03,Inflammation of the bronchial tubes in the lungs
+14,tonsillitis,0.01,Inflammation of the tonsils
