@@ -242,5 +242,3 @@ Metrics are computed against the 15-patient seed ground-truth set using scikit-l
 ---
 
 ## Team
-
-Built as part of the CCS 3101 AI Capstone, Weeks 8–13.
