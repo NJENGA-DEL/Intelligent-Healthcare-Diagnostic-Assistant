@@ -240,5 +240,3 @@ Metrics are computed against the 15-patient seed ground-truth set using scikit-l
 - **This is not a medical device.** Nothing in this system should be used for real diagnostic or treatment decisions.
 
 ---
-
-## Team
