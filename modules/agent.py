@@ -68,6 +68,8 @@ class HealthcareDiagnosticAgent:
         self.memory  = AgentMemory()
         self.performance_score = 0
         self._modules = {}  # Will hold sub-modules
+        self._excluded_symptoms = []  # populated by perceive() when any
+                                       # symptom isn't recognized
 
     def register_module(self, name: str, module):
         """Plug in AI sub-modules (KB, Bayes, ML, etc.)"""
@@ -81,13 +83,31 @@ class HealthcareDiagnosticAgent:
 
     def perceive(self, percept: PatientPercept):
         """Step 1: Perceive the environment"""
+        self._excluded_symptoms = []
+
         if VALID_SYMPTOMS:
             unknown = [s for s in percept.symptoms if s not in VALID_SYMPTOMS]
             if unknown:
-                raise ValueError(
-                    f"Unrecognized symptom(s): {unknown}. "
-                    f"Check data/symptoms.csv for the master list."
-                )
+                # CHANGED: this used to raise a ValueError and reject the
+                # whole patient outright. That's too harsh for a live
+                # system -- one unrecognized symptom (a typo, a symptom
+                # genuinely outside our 26-symptom vocabulary, etc.)
+                # shouldn't stop diagnosis entirely when the patient may
+                # have described several OTHER perfectly valid symptoms.
+                #
+                # Now: warn, strip out only the unrecognized ones, and
+                # keep going with whatever WAS recognized. The excluded
+                # list is stored so act() can surface it in the final
+                # report -- the patient/clinician should know some of
+                # what was described got dropped, not have it silently
+                # vanish.
+                print(f"  ⚠️  Warning: unrecognized symptom(s) ignored: "
+                      f"{unknown}. Check data/symptoms.csv for the master "
+                      f"list. Diagnosis will proceed using only the "
+                      f"recognized symptoms.")
+                self._excluded_symptoms = unknown
+                percept.symptoms = [s for s in percept.symptoms if s in VALID_SYMPTOMS]
+
         self.memory.current_patient = percept
         self.memory.patient_history.append({
             'id': percept.patient_id,
@@ -130,10 +150,15 @@ class HealthcareDiagnosticAgent:
         patient = self.memory.current_patient
 
         # Aggregate confidence from multiple modules
+        # Same exclusion as _aggregate_diagnosis(): a module that
+        # abstained (diagnosis == "Unknown", filler confidence 0.5)
+        # shouldn't drag down the average confidence of the modules
+        # that actually found something.
         confidences = [
             v.get('confidence', 0)
             for v in diagnosis_results.values()
             if isinstance(v, dict) and 'confidence' in v
+            and v.get('diagnosis') != 'Unknown'
         ]
         avg_confidence = sum(confidences)/len(confidences) if confidences else 0.5
 
@@ -144,6 +169,7 @@ class HealthcareDiagnosticAgent:
             'patient_id':   patient.patient_id,
             'timestamp':    patient.timestamp,
             'symptoms':     patient.symptoms,
+            'excluded_symptoms': self._excluded_symptoms,
             'diagnosis':    self._aggregate_diagnosis(diagnosis_results),
             'confidence':   round(avg_confidence, 3),
             'urgency':      urgency,
@@ -173,10 +199,31 @@ class HealthcareDiagnosticAgent:
         return "LOW"
 
     def _aggregate_diagnosis(self, results):
+        # NOTE: Module 2 (Knowledge Base) returns diagnosis names like
+        # "covid19_suspected" or "covid19_confirmed", while Modules 3/4/5
+        # (Bayesian, ML, Neural Network) return bare disease names like
+        # "covid19". Without normalizing these, the Counter-based majority
+        # vote below would NEVER see these as the same diagnosis, even
+        # when every module is correctly pointing at the same disease --
+        # defeating the whole point of aggregating multiple modules'
+        # opinions. Stripping the suffix here fixes that.
+        #
+        # ALSO: a module that found no matching rules/pattern (e.g.
+        # Module 2 when no rule's conditions are fully met) returns
+        # diagnosis="Unknown" with a filler confidence of 0.5. This is
+        # NOT a real vote for a disease called "Unknown" -- it's the
+        # module abstaining. Including it in the majority vote would
+        # let "not sure" compete against actual disease predictions,
+        # and including its filler 0.5 confidence in the average (see
+        # act() below) would understate the real diagnostic confidence
+        # of the modules that DID find something. Both are excluded here.
         diagnoses = [
             v.get('diagnosis', 'Unknown')
+                .replace('_suspected', '')
+                .replace('_confirmed', '')
             for v in results.values()
-            if isinstance(v, dict) and 'diagnosis' in v
+            if isinstance(v, dict) and v.get('diagnosis')
+            and v.get('diagnosis') != 'Unknown'
         ]
         if not diagnoses:
             return "Insufficient data"
@@ -266,4 +313,19 @@ if __name__ == "__main__":
     agent.perceive(patient)
     print("Agent test passed!")
 
-   
+    # ------------------------------------------------------------------
+    # OPTIONAL: uncomment to test the full perceive -> think -> act cycle
+    # using a fake module, before Modules 2-7 are wired in for real.
+    # ------------------------------------------------------------------
+    # class FakeModule:
+    #     """Stands in for a real specialist module during early testing."""
+    #     def analyze(self, patient):
+    #         return {
+    #             'diagnosis': 'test_condition',
+    #             'confidence': 0.5,
+    #             'summary': 'test result'
+    #         }
+    #
+    # agent.register_module('FakeModule', FakeModule())
+    # report = agent.run(patient)
+    # print(report)

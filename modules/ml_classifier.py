@@ -1,7 +1,35 @@
 # ============================================================
 # MODULE 4: ML Classifier — Supervised Diagnosis
 # Covers: Week 9 (Supervised Learning & Decision Trees)
+#
+# NOTE ON THIS REVISION:
+# Two fixes applied to the original version of this file:
+#
+# 1. BUG FIX: `Dict` and `List` were used in type hints (e.g.
+#    `-> Dict`, `symptoms: List[str]`) but never imported from
+#    `typing`. Since Python evaluates function annotations at
+#    definition time, this would raise `NameError: name 'Dict' is
+#    not defined` the moment the module is imported -- before any
+#    code even runs. Fixed by adding the missing import.
+#
+# 2. DATA ALIGNMENT: the original SYMPTOM_FEATURES (18 symptoms,
+#    including stiff_neck, light_sensitivity, sweating,
+#    frequent_urination, excessive_thirst, blurred_vision) and
+#    DISEASE_LABELS (flu, covid19, dengue, cardiac_event, diabetes,
+#    common_cold, tuberculosis, meningitis) didn't match the locked
+#    15-disease/26-symptom list in data/diseases.csv and
+#    data/symptoms.csv, which Modules 2 and 3 are already aligned to.
+#    Replaced with the locked list, loaded from the CSVs directly.
+#
+# Everything else -- the LabelEncoder approach, top5 predictions,
+# symptom_vector in predict() output, and the seaborn evaluation
+# plots -- is unchanged from the original design.
 # ============================================================
+
+import csv
+import os
+import warnings
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -9,11 +37,10 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import classification_report, confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
-import warnings
+from sklearn.metrics import confusion_matrix
+
 warnings.filterwarnings('ignore')
+
 
 class MLDiagnosticClassifier:
     """
@@ -22,21 +49,34 @@ class MLDiagnosticClassifier:
     Gradient Boosting for robust diagnosis.
     """
 
+    # Fallback symptom list, used only if data/symptoms.csv can't be
+    # found -- normally overridden by _load_symptom_list() in __init__
+    # so this always matches Modules 2/3's symptom list exactly.
     SYMPTOM_FEATURES = [
-        'fever', 'cough', 'fatigue', 'headache',
-        'body_aches', 'loss_of_smell', 'chest_pain',
-        'rash', 'joint_pain', 'shortness_of_breath',
-        'sweating', 'frequent_urination', 'excessive_thirst',
-        'blurred_vision', 'night_sweats', 'weight_loss',
-        'stiff_neck', 'light_sensitivity'
+        'fever', 'cough', 'fatigue', 'headache', 'sore_throat',
+        'runny_nose', 'body_aches', 'chills', 'nausea', 'vomiting',
+        'diarrhea', 'rash', 'joint_pain', 'chest_pain',
+        'shortness_of_breath', 'loss_of_smell', 'abdominal_pain',
+        'dizziness', 'night_sweats', 'weight_loss',
+        'loss_of_appetite', 'jaundice', 'painful_urination',
+        'facial_pain', 'swollen_tonsils', 'wheezing',
     ]
 
+    # Fallback disease list -- normally overridden from
+    # data/diseases.csv, same reasoning as above.
     DISEASE_LABELS = [
-        'flu', 'covid19', 'dengue', 'cardiac_event',
-        'diabetes', 'common_cold', 'tuberculosis', 'meningitis'
+        'flu', 'covid19', 'common_cold', 'dengue', 'malaria',
+        'typhoid', 'pneumonia', 'migraine', 'tuberculosis',
+        'hepatitis_a', 'urinary_tract_infection', 'sinusitis',
+        'gastroenteritis', 'bronchitis', 'tonsillitis',
     ]
 
-    def __init__(self):
+    def __init__(self,
+                 symptoms_csv: str = "data/symptoms.csv",
+                 diseases_csv: str = "data/diseases.csv"):
+        self.SYMPTOM_FEATURES = self._load_symptom_list(symptoms_csv)
+        self.DISEASE_LABELS = self._load_disease_list(diseases_csv)
+
         self.models = {
             'Decision Tree':     DecisionTreeClassifier(
                 max_depth=8, criterion='entropy', random_state=42),
@@ -50,30 +90,77 @@ class MLDiagnosticClassifier:
         self.label_encoder = LabelEncoder()
         self.is_trained    = False
 
-    def _generate_synthetic_data(self, n_samples: int = 2000) -> pd.DataFrame:
-        """Generate realistic synthetic medical dataset"""
+    # -----------------------------------------------------------------
+    def _load_symptom_list(self, symptoms_csv: str) -> List[str]:
+        if not os.path.exists(symptoms_csv):
+            return self.SYMPTOM_FEATURES
+        with open(symptoms_csv) as f:
+            symptoms = [row["symptom_name"] for row in csv.DictReader(f)]
+        return symptoms if symptoms else self.SYMPTOM_FEATURES
+
+    def _load_disease_list(self, diseases_csv: str) -> List[str]:
+        if not os.path.exists(diseases_csv):
+            return self.DISEASE_LABELS
+        with open(diseases_csv) as f:
+            diseases = [row["disease_name"] for row in csv.DictReader(f)]
+        return diseases if diseases else self.DISEASE_LABELS
+
+    # -----------------------------------------------------------------
+    def _generate_synthetic_data(self, n_samples: int = 4500) -> pd.DataFrame:
+        """Generate realistic synthetic medical dataset.
+
+        n_samples default raised from the original 2000 to 4500 (300 per
+        disease across 15 diseases) -- 15 classes need more per-class
+        samples than 8 classes did to avoid the models under-fitting
+        rarer diseases.
+        """
         np.random.seed(42)
         records = []
 
-        # Disease profiles: P(symptom | disease)
+        # Disease profiles: P(symptom | disease). Same illustrative
+        # probabilities used in Module 3's likelihood table, kept
+        # consistent across modules.
         profiles = {
-            'flu':           {'fever':0.90,'cough':0.85,'fatigue':0.88,
-                              'headache':0.70,'body_aches':0.80,'loss_of_smell':0.20},
-            'covid19':       {'fever':0.88,'cough':0.80,'fatigue':0.90,
-                              'loss_of_smell':0.85,'headache':0.65,'body_aches':0.60},
-            'dengue':        {'fever':0.98,'rash':0.75,'joint_pain':0.85,
-                              'headache':0.90,'fatigue':0.80,'body_aches':0.88},
-            'cardiac_event': {'chest_pain':0.92,'shortness_of_breath':0.88,
-                              'fatigue':0.70,'sweating':0.75,'headache':0.30},
-            'diabetes':      {'fatigue':0.82,'frequent_urination':0.95,
-                              'excessive_thirst':0.92,'blurred_vision':0.70,
-                              'weight_loss':0.50},
-            'common_cold':   {'cough':0.90,'fever':0.50,'headache':0.60,
-                              'fatigue':0.55,'body_aches':0.50},
-            'tuberculosis':  {'cough':0.95,'weight_loss':0.85,'night_sweats':0.80,
-                              'fatigue':0.88,'fever':0.70},
-            'meningitis':    {'headache':0.95,'stiff_neck':0.90,'fever':0.92,
-                              'light_sensitivity':0.85,'fatigue':0.80},
+            'flu': {'fever': 0.90, 'cough': 0.85, 'fatigue': 0.88,
+                    'body_aches': 0.80, 'chills': 0.60, 'sore_throat': 0.50,
+                    'headache': 0.55},
+            'covid19': {'fever': 0.85, 'cough': 0.80, 'fatigue': 0.75,
+                        'loss_of_smell': 0.65, 'sore_throat': 0.45,
+                        'shortness_of_breath': 0.40, 'headache': 0.50},
+            'common_cold': {'runny_nose': 0.90, 'sore_throat': 0.75,
+                             'cough': 0.65, 'fatigue': 0.40, 'fever': 0.25,
+                             'headache': 0.30},
+            'dengue': {'fever': 0.98, 'rash': 0.75, 'joint_pain': 0.85,
+                       'headache': 0.70, 'nausea': 0.55, 'vomiting': 0.40},
+            'malaria': {'fever': 0.95, 'chills': 0.85, 'headache': 0.70,
+                        'fatigue': 0.65, 'nausea': 0.50, 'vomiting': 0.35},
+            'typhoid': {'fever': 0.90, 'abdominal_pain': 0.70,
+                        'loss_of_appetite': 0.75, 'headache': 0.55,
+                        'fatigue': 0.60, 'diarrhea': 0.40},
+            'pneumonia': {'cough': 0.90, 'fever': 0.80, 'chest_pain': 0.65,
+                          'shortness_of_breath': 0.75, 'fatigue': 0.55,
+                          'wheezing': 0.40},
+            'migraine': {'headache': 0.95, 'dizziness': 0.55,
+                         'nausea': 0.60, 'fatigue': 0.30},
+            'tuberculosis': {'cough': 0.85, 'weight_loss': 0.75,
+                              'night_sweats': 0.70, 'fatigue': 0.65,
+                              'fever': 0.50, 'chest_pain': 0.40},
+            'hepatitis_a': {'jaundice': 0.80, 'fatigue': 0.70,
+                             'nausea': 0.65, 'loss_of_appetite': 0.60,
+                             'abdominal_pain': 0.45, 'vomiting': 0.35},
+            'urinary_tract_infection': {'painful_urination': 0.90,
+                                         'abdominal_pain': 0.55,
+                                         'fever': 0.30, 'fatigue': 0.25},
+            'sinusitis': {'facial_pain': 0.85, 'headache': 0.70,
+                          'runny_nose': 0.65, 'fever': 0.20},
+            'gastroenteritis': {'vomiting': 0.80, 'diarrhea': 0.85,
+                                 'abdominal_pain': 0.75, 'nausea': 0.70,
+                                 'fever': 0.30},
+            'bronchitis': {'cough': 0.90, 'wheezing': 0.60,
+                            'chest_pain': 0.45, 'fatigue': 0.40,
+                            'fever': 0.25},
+            'tonsillitis': {'sore_throat': 0.90, 'swollen_tonsils': 0.85,
+                             'fever': 0.55, 'fatigue': 0.30},
         }
 
         n_per_class = n_samples // len(profiles)
@@ -83,7 +170,8 @@ class MLDiagnosticClassifier:
                 for symptom, prob in symptom_probs.items():
                     if symptom in record:
                         record[symptom] = int(np.random.random() < prob)
-                # Add some noise
+                # Add background noise so unrelated diseases aren't
+                # trivially separable by symptom absence alone.
                 for feat in self.SYMPTOM_FEATURES:
                     if record[feat] == 0 and np.random.random() < 0.05:
                         record[feat] = 1
@@ -93,9 +181,13 @@ class MLDiagnosticClassifier:
         df = pd.DataFrame(records).sample(frac=1, random_state=42)
         return df
 
+    # -----------------------------------------------------------------
     def train(self, verbose: bool = True) -> Dict:
-        """Train all models and select the best one"""
-        df = self._generate_synthetic_data(2000)
+        """Train all models and select the best one via cross-validation
+        (per the manual's explicit guidance: use cross_val_score, not
+        just a single train/test split, so the chosen model is the one
+        that generalizes best)."""
+        df = self._generate_synthetic_data(4500)
         X  = df[self.SYMPTOM_FEATURES].values
         y  = self.label_encoder.fit_transform(df['disease'])
 
@@ -103,7 +195,7 @@ class MLDiagnosticClassifier:
             X, y, test_size=0.2, random_state=42, stratify=y)
 
         results = {}
-        best_acc = 0.0
+        best_cv_mean = 0.0
 
         if verbose:
             print("=" * 55)
@@ -120,14 +212,16 @@ class MLDiagnosticClassifier:
                 'test_acc': test_acc
             }
             if verbose:
-                print(f"\n  🌲 {name}")
-                print(f"     CV Accuracy : {cv_scores.mean():.4f} "
-                      f"± {cv_scores.std():.4f}")
+                print(f"\n  {name}")
+                print(f"     CV Accuracy  : {cv_scores.mean():.4f} "
+                      f"+/- {cv_scores.std():.4f}")
                 print(f"     Test Accuracy: {test_acc:.4f}")
 
-            if test_acc > best_acc:
-                best_acc          = test_acc
-                self.best_model   = model
+            # Selection is based on cross-val mean (not single test
+            # accuracy) per the manual's guidance.
+            if cv_scores.mean() > best_cv_mean:
+                best_cv_mean       = cv_scores.mean()
+                self.best_model    = model
                 self.best_model_name = name
 
         self.is_trained = True
@@ -135,10 +229,11 @@ class MLDiagnosticClassifier:
         self._y_test = y_test
 
         if verbose:
-            print(f"\n  🏆 Best Model: {self.best_model_name} "
-                  f"({best_acc:.4f})")
+            print(f"\n  Best Model: {self.best_model_name} "
+                  f"(CV accuracy: {best_cv_mean:.4f})")
         return results
 
+    # -----------------------------------------------------------------
     def predict(self, symptoms: List[str]) -> Dict:
         """Predict disease from symptom list"""
         if not self.is_trained:
@@ -151,7 +246,7 @@ class MLDiagnosticClassifier:
         pred_encoded = self.best_model.predict(features)[0]
         pred_proba   = self.best_model.predict_proba(features)[0]
 
-        disease  = self.label_encoder.inverse_transform([pred_encoded])[0]
+        disease  = str(self.label_encoder.inverse_transform([pred_encoded])[0])
         classes  = self.label_encoder.inverse_transform(
             range(len(pred_proba)))
         prob_map = dict(zip(classes, pred_proba))
@@ -165,6 +260,7 @@ class MLDiagnosticClassifier:
             'symptom_vector': features[0].tolist()
         }
 
+    # -----------------------------------------------------------------
     def analyze(self, percept) -> Dict:
         """Module interface for the agent"""
         result = self.predict(percept.symptoms)
@@ -173,16 +269,26 @@ class MLDiagnosticClassifier:
                              f"({result['confidence']:.2%})")
         return result
 
-    def plot_evaluation(self):
-        """Visualize model performance"""
+    # -----------------------------------------------------------------
+    def plot_evaluation(self, save_path: str = "evaluation/ml_evaluation.png"):
+        """Visualize model performance. Saved to disk (headless-safe --
+        no plt.show(), since this needs to run in CI/terminal
+        environments without a display)."""
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+
         if not self.is_trained:
             self.train(verbose=False)
+
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
 
         y_pred = self.best_model.predict(self._X_test)
         cm     = confusion_matrix(self._y_test, y_pred)
         labels = self.label_encoder.classes_
 
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        fig, axes = plt.subplots(1, 2, figsize=(18, 7))
 
         # Confusion Matrix
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
@@ -210,6 +316,23 @@ class MLDiagnosticClassifier:
         plt.suptitle(f"ML Diagnostic Model Evaluation — {self.best_model_name}",
                      fontsize=14, fontweight='bold')
         plt.tight_layout()
-        plt.savefig("ml_evaluation.png", dpi=150, bbox_inches='tight')
-        plt.show()
-        print("✅ Saved: ml_evaluation.png")
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        print(f"Saved: {save_path}")
+
+
+# ============================================================
+# STANDALONE TEST
+# Matches the manual's own test pattern.
+# ============================================================
+if __name__ == "__main__":
+    clf = MLDiagnosticClassifier()
+    clf.train(verbose=True)
+
+    result = clf.predict(["fever", "cough", "fatigue", "loss_of_smell"])
+    print(f"\nDiagnosis : {result['diagnosis']}")
+    print(f"Confidence: {result['confidence']:.2%}")
+    print(f"Model Used: {result['model_used']}")
+    print(f"Top 5     : {result['top5']}")
+
+    clf.plot_evaluation()
