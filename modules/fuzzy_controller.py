@@ -1,9 +1,22 @@
 # ============================================================
 # MODULE 6: Fuzzy Logic — Patient Severity Assessment
 # Covers: Week 12 (Fuzzy Logic)
+#
+# NOTE ON THIS REVISION:
+# 1. BUG FIX: `Dict` was used in type hints (`-> Dict[str, float]`,
+#    `-> Dict`) but never imported from `typing`. Fixed by adding the
+#    import.
+# 2. Added the standalone test block from the manual's own "How To
+#    Test" section, which was missing from the original file.
+#
+# No data alignment was needed here -- unlike Modules 2-5, this
+# module reasons purely from vitals (temperature, heart rate, symptom
+# COUNT) and never references specific disease or symptom NAMES, so
+# it was already independent of the 15-disease/26-symptom list.
 # ============================================================
 
-import numpy as np
+from typing import Dict
+
 
 class FuzzySeverityAssessor:
     """
@@ -118,3 +131,22 @@ class FuzzySeverityAssessor:
         result['diagnosis'] = result['severity_label']
         result['confidence']= result['severity_score'] / 100
         return result
+
+
+# ============================================================
+# STANDALONE TEST
+# Matches the manual's own "How To Test" section exactly.
+# ============================================================
+if __name__ == "__main__":
+    fa = FuzzySeverityAssessor()
+    test_cases = [
+        (37.0, 72, 2, "Normal patient"),
+        (38.5, 95, 4, "Mild illness"),
+        (39.8, 115, 7, "Severe case"),
+        (40.2, 130, 9, "Critical case"),
+    ]
+
+    for temp, hr, count, desc in test_cases:
+        result = fa.assess(temp, hr, count)
+        print(f"{desc}: Score={result['severity_score']}, "
+              f"Label={result['severity_label']}")

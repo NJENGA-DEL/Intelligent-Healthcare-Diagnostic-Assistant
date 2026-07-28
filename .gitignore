@@ -1,0 +1,9 @@
+.venv
+venv/
+confusion_matrices.png
+module_comparison.png
+Environment Setup
+naive bayes example
+decision_trees_impelementation_with_ID3_.ipynb
+__pycache__/
+e false
