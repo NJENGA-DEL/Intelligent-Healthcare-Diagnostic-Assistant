@@ -238,5 +238,3 @@ Metrics are computed against the 15-patient seed ground-truth set using scikit-l
 - **Small evaluation set.** 15 ground-truth patients (one per disease) is sufficient to demonstrate the evaluation pipeline, not to make statistically rigorous accuracy claims.
 - **Fuzzy severity scores** are internally consistent but don't exactly reproduce the manual's own illustrative example numbers, since the manual describes membership function _shapes_ in words without specifying exact formulas.
 - **This is not a medical device.** Nothing in this system should be used for real diagnostic or treatment decisions.
-
----
