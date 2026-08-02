@@ -187,7 +187,7 @@ class MLDiagnosticClassifier:
         (per the manual's explicit guidance: use cross_val_score, not
         just a single train/test split, so the chosen model is the one
         that generalizes best)."""
-        df = self._generate_synthetic_data(4500)
+        df = self._generate_synthetic_data(3000)
         X  = df[self.SYMPTOM_FEATURES].values
         y  = self.label_encoder.fit_transform(df['disease'])
 

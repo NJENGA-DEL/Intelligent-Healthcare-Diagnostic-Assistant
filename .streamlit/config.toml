@@ -1,0 +1,17 @@
+[theme]
+base = "light"
+primaryColor = "#1A56DB"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F4F6"
+textColor = "#111827"
+font = "sans serif"
+
+[server]
+headless = true
+# Don't scan for file changes -- on Streamlit Cloud the repo is immutable,
+# and disabling the watcher removes per-rerun overhead.
+fileWatcherType = "none"
+runOnSave = false
+
+[browser]
+gatherUsageStats = false
