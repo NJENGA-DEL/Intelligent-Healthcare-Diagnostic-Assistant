@@ -112,7 +112,10 @@ Modules 2–5 all share a common contract — given a patient, predict a **disea
 ├── reports/
 │   └── final_report.pdf
 │
-├── app.py                      # Main entry point
+├── app.py                      # CLI entry point (source of truth)
+├── streamlit_app.py            # Streamlit dashboard GUI (presentation layer over app.py)
+├── .streamlit/config.toml      # Streamlit theme + server settings
+├── .github/workflows/          # Repo keep-alive workflow
 ├── requirements.txt
 └── README.md
 ```
@@ -168,6 +171,8 @@ python3 -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 
 Run the application from the **repository root**:
 
+### CLI (manual-aligned source of truth)
+
 ```bash
 python3 app.py
 ```
@@ -185,6 +190,18 @@ You'll be prompted to choose a mode:
 - **Option 3** runs both in sequence.
 
 Each patient report includes: diagnosis, confidence, urgency level, fuzzy severity score, the RL agent's independently-learned action recommendation (for comparison against the Agent's own rule-based recommendation), similar historical cases, and a full step-by-step treatment plan.
+
+### Streamlit dashboard (hosted GUI)
+
+```bash
+streamlit run streamlit_app.py
+```
+
+The dashboard is a professional clinical EMR-style GUI built on top of the exact same pipeline — it imports `build_system()`, `process_patient()`, `get_test_patients()`, and `build_nlp_patient()` from `app.py` and contains no diagnostic logic of its own. It is the entry point used when the app is deployed (e.g. Streamlit Community Cloud) and will auto-load from `streamlit_app.py` when present.
+
+### Deployment (Streamlit Community Cloud)
+
+Push the repository to GitHub, then connect it on [Streamlit Community Cloud](https://share.streamlit.io). It auto-detects `streamlit_app.py` as the entry point, and `.streamlit/config.toml` already sets `headless = true` and disables the file watcher for cloud hosting. No extra configuration is required.
 
 ### Running Evaluation
 

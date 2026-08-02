@@ -192,7 +192,7 @@ class NeuralDiagnosticModel:
     # -----------------------------------------------------------------
     def train(self, epochs: int = 50, verbose: int = 1) -> Dict:
         """Train the neural network"""
-        X, y = self._generate_data(4500)
+        X, y = self._generate_data(3000)
         split = int(0.8 * len(X))
         X_train, X_val = X[:split], X[split:]
         y_train, y_val = y[:split], y[split:]
