@@ -725,7 +725,7 @@ elif nav == "About":
 
     <div class="about-card">
         <h4>Course</h4>
-        <p>CCS 3101 — Introduction to Artificial Intelligence · 13-Week Capstone · Dedan Kimathi University of Science and Technology</p>
+        <p>CCS 3101 —  Artificial Intelligence · 13-Week Capstone · Dedan Kimathi University of Science and Technology</p>
     </div>
     """, unsafe_allow_html=True)
 
